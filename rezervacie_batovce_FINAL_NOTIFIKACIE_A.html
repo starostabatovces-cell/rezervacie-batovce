@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rezervácie – Multifunkčné ihrisko Bátovce</title>
+  <style>
+    :root{
+      --bg:#0b1020; --card:#141a32; --muted:#9aa3b2; --text:#e9eef6;
+      --accent:#4f8cff; --accent-2:#22c55e; --danger:#ef4444; --warn:#f59e0b;
+      --border:rgba(255,255,255,.08);
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:radial-gradient(1200px 800px at 20% -10%, #15204a 0%, transparent 60%),
+                 radial-gradient(900px 600px at 100% 0%, #10244d 0%, transparent 60%),
+                 var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; gap:20px;}
+    .container{width:min(1100px,96%); margin:0 auto;}
+    header{padding:20px 0 0;}
+    h1{font-size:clamp(22px,2.6vw,34px); margin:0 0 6px;}
+    .sub{color:var(--muted); margin-bottom:12px;}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0) 80%), var(--card);
+      border:1px solid var(--border); border-radius:12px; padding:14px;}
+    .grid{display:grid; grid-template-columns:1.2fr .8fr; gap:16px;}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    label{font-size:13px; color:var(--muted);}
+    input, select, button{font:inherit; border:1px solid var(--border); background:#0f1430; color:var(--text);
+      padding:8px 10px; border-radius:8px; outline:none;}
+    button{cursor:pointer;}
+    .btn-accent{background:var(--accent); color:white; padding:8px 10px; border-radius:8px; border:none;}
+    .btn-approve{background:var(--accent-2); color:#072a10; border:none; padding:8px 10px; border-radius:8px;}
+    .btn-danger{background:var(--danger); color:white; border:none; padding:8px 10px; border-radius:8px;}
+    .btn-warn{background:var(--warn); color:#261a00; border:none; padding:8px 10px; border-radius:8px;}
+    .muted{color:var(--muted);}
+    .slots{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; margin-top:10px;}
+    .slot{border:1px solid var(--border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; align-items:center; background:#0f1536;}
+    .tag{font-size:12px; padding:4px 8px; border-radius:999px; border:1px solid var(--border); background:#10163a;}
+    .tag-ok{background:#0f2a1b; border-color:#1e8b54;}
+    .tag-pending{background:#2a230f; border-color:#c68e1a;}
+    .tag-busy{background:#2a1212; border-color:#bf3a3a;}
+    .tag-school{background:#17223c; border-color:#4f8cff;}
+    .list{display:flex; flex-direction:column; gap:8px; margin-top:8px;}
+    .item{border:1px solid var(--border); border-radius:10px; padding:10px; background:#0e1533; display:flex; justify-content:space-between; align-items:center;}
+    .sep{height:1px; background:var(--border); margin:10px 0;}
+    footer{color:var(--muted); font-size:12px; padding:0 0 18px 0;}
+    .inline-help{font-size:12px; color:var(--muted);}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+    /* print styling for nástenka */
+    @media print{
+      body{background:white;color:black;}
+      header, .tabs, #adminPanel, #adminLogin, .row > button, .btn-accent, .btn-approve, .btn-danger, .btn-warn { display:none !important; }
+      #tab-day{display:block !important;}
+      #tab-book{display:none !important;}
+      footer{display:none;}
+      .slot{border:1px solid #ccc; background:white; color:black;}
+      .tag{border-color:#000;}
+    }
+    /* badge styling */
+    #pendingBadge{display:none; margin-left:6px; background:#ef4444; color:white; padding:2px 6px; border-radius:8px; font-size:12px;}
+  </style>
+</head>
+<body>
+  <header class="container">
+    <div class="row" style="justify-content:space-between;">
+      <div style="font-weight:600;">Multifunkčné ihrisko Bátovce – Rezervácie</div>
+      <div><span id="adminStatus" style="border:1px solid rgba(255,255,255,.08); padding:6px 10px; border-radius:999px;">Neprihlásený</span></div>
+    </div>
+    <h1>Rezervácie ihriska</h1>
+    <p class="sub container">Otvorené denne <strong>08:00 – 22:00</strong>.
+      Každý pracovný deň (Po–Pia) <strong>12:00 – 13:30</strong> je trvalo rezervované pre školu (uzamknuté).
+      Rezervovať je možné maximálne <strong>3 mesiace dopredu</strong>. Limit čakajúcich žiadostí: <strong>20</strong>.
+    </p>
+  </header>
+
+  <main class="container grid" role="main">
+    <section class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="book">Vytvoriť rezerváciu</button>
+        <button class="tab" data-tab="day">Prehľad dňa</button>
+      </div>
+
+      <div id="tab-book">
+        <div class="row" style="gap:12px; margin-top:8px;">
+          <div style="flex:1; min-width:160px;"><label>Dátum</label><input type="date" id="date" /></div>
+          <div style="min-width:140px;"><label>Začiatok</label><input type="time" id="startTime" step="1800" /></div>
+          <div style="min-width:140px;"><label>Trvanie</label>
+            <select id="duration"><option value="30">30 min</option><option value="60" selected>1 hod</option><option value="90">1 h 30 min</option><option value="120">2 h</option></select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div style="flex:1"><label>E-mail</label><input id="email" type="email" placeholder="napr. jana@example.com" /></div>
+          <div style="flex:1"><label>Poznámka</label><input id="note" type="text" placeholder="Futbal s kamarátmi" /></div>
+        </div>
+        <div class="row" style="margin-top:10px; gap:12px;">
+          <button class="btn-accent" id="makeReservation">Odoslať žiadosť</button>
+          <div class="inline-help" id="bookMsg"></div>
+        </div>
+
+        <div class="sep"></div>
+        <div><strong>Legenda:</strong> <span class="tag tag-ok">Voľné</span> <span class="tag tag-busy">Uzamknuté</span> <span class="tag tag-pending">Čaká na schválenie</span> <span class="tag tag-school">Škola (uzamknuté)</span></div>
+
+        <div class="slots" id="slots" aria-live="polite" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="tab-day" style="display:none; margin-top:8px;">
+        <div class="row">
+          <div style="min-width:160px;"><label>Dátum</label><input type="date" id="dayDate" /></div>
+          <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <button id="refreshDay">Obnoviť</button>
+            <button id="printDay" class="btn-warn">Tlač nástenky</button>
+          </div>
+        </div>
+        <div class="list" id="dayList" style="margin-top:10px;"></div>
+      </div>
+    </section>
+
+    <aside class="card" aria-label="Admin">
+      <h3>Admin</h3>
+      <p class="muted">Prihláste sa pre schvaľovanie rezervácií. (Údaje nie sú zobrazené.)</p>
+
+      <div id="adminLogin">
+        <div style="margin-bottom:8px;"><label>Prihlasovacie meno</label><input type="text" id="adminNick" placeholder="Admin" autocomplete="username"></div>
+        <div style="margin-bottom:8px;"><label>Heslo</label><input type="password" id="adminPassword" placeholder="Heslo" autocomplete="current-password"></div>
+        <div><button class="btn-warn" id="loginBtn">Prihlásiť</button></div>
+      </div>
+
+      <div id="adminPanel" style="display:none; margin-top:8px;">
+        <div class="row" style="justify-content:space-between; position:relative;">
+          <strong>Žiadosti na schválenie <span id="pendingBadge">NOVÉ</span></strong>
+          <button id="logoutBtn">Odhlásiť</button>
+        </div>
+        <div class="list" id="pendingList" style="margin-top:8px;"></div>
+        <div class="sep"></div>
+        <div class="row" style="justify-content:space-between;"><strong>Schválené rezervácie</strong>
+          <div style="display:flex; gap:8px;"><button id="exportCsv" class="btn-accent">Export CSV</button><button id="clearApproved" class="btn-danger">Zmazať všetky</button></div>
+        </div>
+        <div class="list" id="approvedList" style="margin-top:8px;"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="container"><span id="year"></span> © Bátovce – Multifunkčné ihrisko</footer>
+
+<script>
+/* ==================== Nastavenia ==================== */
+const STORAGE_KEY = 'batovce_reservations_final_v1';
+const ADMIN_USER = 'adminbatovce12';
+const ADMIN_PASSWORD = 'starostabatovce12';
+
+const openHour = 8, closeHour = 22;
+const MAX_PENDING_IN_WINDOW = 20;
+const MAX_MONTHS_AHEAD = 3;
+const MAX_PENDING_PER_EMAIL = 3;
+
+// School block: every weekday (Mon-Fri) 12:00-13:30 permanently
+const SCHOOL_BLOCK = { start: 12*60, end: 13*60 + 30 };
+
+// Notification channel (BroadcastChannel when available)
+let bc = null;
+try { if ('BroadcastChannel' in window) bc = new BroadcastChannel('rezervacie_channel'); } catch(e){ bc = null; }
+
+/* ==================== Helpers ==================== */
+function loadDB(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { reservations: [] }; } catch(e){ return { reservations: [] }; } }
+function saveDB(db){ localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+function toISODate(d){ return d.toISOString().slice(0,10); }
+function parseTime(str){ const [h,m] = str.split(':').map(Number); return h*60 + m; }
+function minutesToHHMM(min){ const h = Math.floor(min/60).toString().padStart(2,'0'); const m = (min%60).toString().padStart(2,'0'); return h+':'+m; }
+function isWeekday(dateStr){ const d = new Date(dateStr + 'T00:00:00'); const day = d.getDay(); return day >= 1 && day <= 5; }
+function overlaps(aStart,aEnd,bStart,bEnd){ return aStart < bEnd && bStart < aEnd; }
+function getTodayISO(){ const t=new Date(); t.setHours(0,0,0,0); return toISODate(t); }
+function getLimitISO(months){ const t=new Date(); t.setHours(0,0,0,0); t.setMonth(t.getMonth()+months); return toISODate(t); }
+
+/* ==================== Rendering ==================== */
+function collectDayReservations(dateStr){
+  const db = loadDB();
+  const approved = db.reservations.filter(r => r.date === dateStr && r.status === 'approved');
+  const pending = db.reservations.filter(r => r.date === dateStr && r.status === 'pending');
+  return { approved, pending };
+}
+
+function renderSlots(dateStr){
+  const container = document.getElementById('slots');
+  container.innerHTML = '';
+  const { approved, pending } = collectDayReservations(dateStr);
+  for(let t = openHour*60; t < closeHour*60; t += 30){
+    const slotStart = t, slotEnd = t+30;
+    let state = 'free';
+    if(isWeekday(dateStr) && overlaps(slotStart, slotEnd, SCHOOL_BLOCK.start, SCHOOL_BLOCK.end)){
+      state = 'school';
+    }
+    if(state === 'free'){
+      for(const r of approved){ if(overlaps(slotStart, slotEnd, r.startMin, r.endMin)){ state = 'busy'; break; } }
+    }
+    if(state === 'free'){
+      for(const r of pending){ if(overlaps(slotStart, slotEnd, r.startMin, r.endMin)){ state = 'pending'; break; } }
+    }
+    const div = document.createElement('div'); div.className = 'slot';
+    const time = document.createElement('div'); time.textContent = minutesToHHMM(slotStart) + ' – ' + minutesToHHMM(slotEnd);
+    const tag = document.createElement('span'); tag.className = 'tag ' + (state==='free'?'tag-ok':state==='busy'?'tag-busy':state==='pending'?'tag-pending':'tag-school');
+    tag.textContent = state==='free'?'Voľné': state==='busy'?'Uzamknuté': state==='pending'?'Čaká na schválenie':'Škola (uzamknuté)';
+    div.appendChild(time); div.appendChild(tag); container.appendChild(div);
+  }
+}
+
+
+// ==================== EMAIL NOTIFIKÁCIE (FORMSPREE) ====================
+
+// Nová žiadosť → notifikácia adminovi
+async function sendFormspreeNotification(res){
+  const formData = new FormData();
+  formData.append('_replyto', 'starosta.batovces@gmail.com');
+  formData.append('_subject', 'NOVÁ ŽIADOSŤ O REZERVÁCIU IHRISKA');
+  formData.append('Správa', `
+Dátum: ${res.date}
+Čas: ${minutesToHHMM(res.startMin)} – ${minutesToHHMM(res.endMin)}
+Email žiadateľa: ${res.email}
+Poznámka: ${res.note || '—'}
+  `);
+
+  try { await fetch('https://formspree.io/f/mjknjvrr', { method:'POST', body:formData }); }
+  catch(e){}
+}
+
+// Schválenie → notifikácia adminovi (aby informoval používateľa)
+async function sendApprovalEmail(res){
+  const formData = new FormData();
+  formData.append('_replyto', 'starosta.batovces@gmail.com');
+  formData.append('_subject', 'REZERVÁCIA SCHVÁLENÁ – INFORMUJTE UŽÍVATEĽA');
+  formData.append('Správa', `
+Rezervácia bola schválená.
+
+Dátum: ${res.date}
+Čas: ${minutesToHHMM(res.startMin)} – ${minutesToHHMM(res.endMin)}
+
+Email používateľa:
+${res.email}
+
+Poznámka:
+${res.note || '—'}
+  `);
+
+  try { await fetch('https://formspree.io/f/mjknjvrr', { method:'POST', body:formData }); }
+  catch(e){}
+}
+
+/* ==================== Create reservation ==================== */
+async function makeReservation(){
+  const date = document.getElementById('date').value;
+  const start = document.getElementById('startTime').value;
+  const duration = parseInt(document.getElementById('duration').value,10);
+  const email = (document.getElementById('email').value||'').trim().toLowerCase();
+  const note = (document.getElementById('note').value||'').trim();
+  const msg = document.getElementById('bookMsg'); msg.textContent = '';
+
+  if(!date || !start){ msg.textContent = 'Vyberte dátum a čas.'; return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ msg.textContent = 'Zadajte platný e-mail.'; return; }
+
+  const todayISO = getTodayISO(); const limitISO = getLimitISO(MAX_MONTHS_AHEAD);
+  if(date < todayISO){ msg.textContent = 'Nedá sa rezervovať do minulosti.'; return; }
+  if(date > limitISO){ msg.textContent = 'Nedá sa rezervovať viac ako ' + MAX_MONTHS_AHEAD + ' mesiace dopredu.'; return; }
+
+  const startMin = parseTime(start); const endMin = startMin + duration;
+  if(startMin < openHour*60 || endMin > closeHour*60){ msg.textContent = 'Mimo otváracích hodín.'; return; }
+
+  if(isWeekday(date) && overlaps(startMin, endMin, SCHOOL_BLOCK.start, SCHOOL_BLOCK.end)){
+    msg.textContent = 'Tento čas je rezervovaný pre školu.'; return;
+  }
+
+  const db = loadDB();
+  const pendingInWindow = db.reservations.filter(r => r.status==='pending' && r.date >= todayISO && r.date <= limitISO).length;
+  if(pendingInWindow >= MAX_PENDING_IN_WINDOW){ msg.textContent = 'Dosiahnutý limit čakajúcich žiadostí.'; return; }
+
+  const pendingForEmail = db.reservations.filter(r => r.status==='pending' && r.email.toLowerCase()===email && r.date >= todayISO && r.date <= limitISO).length;
+  if(pendingForEmail >= MAX_PENDING_PER_EMAIL){ msg.textContent = 'Tento e-mail má dosiahnutý limit čakajúcich žiadostí.'; return; }
+
+  // check collisions with approved
+  const { approved } = collectDayReservations(date);
+  for(const r of approved){ if(overlaps(startMin, endMin, r.startMin, r.endMin)){ msg.textContent = 'Tento čas je už uzamknutý.'; return; } }
+
+  const newRes = { id: uid(), date, startMin, endMin, email, note, status:'pending', createdAt: Date.now() };
+  db.reservations.push(newRes); saveDB(db);
+  msg.textContent = 'Žiadosť odoslaná. Admin ju musí schváliť.';
+  renderSlots(date); renderAdminLists(); renderDayList(document.getElementById('dayDate').value || date);
+
+  // Notify other tabs/admin
+  const payload = { type:'newReservation', data: newRes };
+  if(bc) try{ bc.postMessage(payload); } catch(e){ localStorage.setItem('rez_new', JSON.stringify({t:Date.now(), id:newRes.id})); }
+  else localStorage.setItem('rez_new', JSON.stringify({t:Date.now(), id:newRes.id}));
+
+  // If admin is logged in here, show desktop notification
+  if(isAdminLogged()){ showDesktopNotification('Nová rezervácia', `E-mail: ${newRes.email} — ${newRes.date} ${minutesToHHMM(newRes.startMin)}`); showPendingBadge(); }
+}
+
+/* ==================== Notifications ==================== */
+function requestNotificationPermission(){
+  if('Notification' in window && Notification.permission !== 'granted'){
+    Notification.requestPermission().then(p => console.log('Notification permission:', p));
+  }
+}
+function showDesktopNotification(title, body){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'granted'){
+    try{
+      const n = new Notification(title, { body, silent: false });
+      n.onclick = () => window.focus();
+    }catch(e){ console.warn('Notification failed', e); }
+  } else {
+    // request and then show if granted
+    Notification.requestPermission().then(p => { if(p==='granted'){ showDesktopNotification(title, body); } });
+  }
+}
+
+// Listen for broadcast/new reservation messages
+if(bc){
+  bc.onmessage = (ev) => {
+    const msg = ev.data;
+    if(msg && msg.type === 'newReservation'){
+      if(isAdminLogged()){
+        showDesktopNotification('Nová rezervácia', `E-mail: ${msg.data.email} — ${msg.data.date} ${minutesToHHMM(msg.data.startMin)}`);
+        showPendingBadge();
+      }
+      renderSlots(document.getElementById('date').value);
+      renderAdminLists();
+      renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+    }
+    if(msg && (msg.type === 'approved' || msg.type==='deleted')){
+      renderSlots(document.getElementById('date').value);
+      renderAdminLists();
+      renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+    }
+  };
+}
+// fallback to storage event
+window.addEventListener('storage', (e) => {
+  if((e.key === 'rez_new' || e.key === 'rez_update') && e.newValue){
+    try{
+      const parsed = JSON.parse(e.newValue);
+      const db = loadDB();
+      const r = db.reservations.find(x => x.id === parsed.id);
+      if(r && isAdminLogged()){ showDesktopNotification('Nová rezervácia', `E-mail: ${r.email} — ${r.date} ${minutesToHHMM(r.startMin)}`); showPendingBadge(); }
+      renderSlots(document.getElementById('date').value);
+      renderAdminLists();
+      renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+    }catch(e){}
+  }
+});
+
+/* ==================== Admin ==================== */
+function isAdminLogged(){ return sessionStorage.getItem('batovce_admin') === '1'; }
+function setAdminStatusUI(){ document.getElementById('adminStatus').textContent = isAdminLogged() ? 'Prihlásený: admin' : 'Neprihlásený'; document.getElementById('adminLogin').style.display = isAdminLogged() ? 'none' : 'block'; document.getElementById('adminPanel').style.display = isAdminLogged() ? 'block' : 'none'; }
+function showPendingBadge(){ const badge = document.getElementById('pendingBadge'); if(badge){ badge.style.display = 'inline-block'; } }
+function hidePendingBadge(){ const badge = document.getElementById('pendingBadge'); if(badge){ badge.style.display = 'none'; } }
+
+function login(){
+  const u = (document.getElementById('adminNick').value||'').trim();
+  const p = (document.getElementById('adminPassword').value||'').trim();
+  if(u === ADMIN_USER && p === ADMIN_PASSWORD){
+    sessionStorage.setItem('batovce_admin','1');
+    setAdminStatusUI();
+    renderAdminLists();
+    requestNotificationPermission();
+    // if broadcast channel, announce admin present (optional)
+    // show badge if there are pending requests
+    const db = loadDB();
+    const pendings = db.reservations.filter(r=>r.status==='pending');
+    if(pendings.length>0) showPendingBadge(); else hidePendingBadge();
+  } else alert('Nesprávne prihlasovacie údaje.');
+}
+function logout(){ sessionStorage.removeItem('batovce_admin'); setAdminStatusUI(); hidePendingBadge(); }
+
+async function renderAdminLists(){
+  const db = loadDB();
+  const pendingEl = document.getElementById('pendingList'); pendingEl.innerHTML='';
+  const approvedEl = document.getElementById('approvedList'); approvedEl.innerHTML='';
+  const pendings = db.reservations.filter(r=>r.status==='pending').sort((a,b)=>a.date.localeCompare(b.date)||a.startMin-b.startMin);
+  const approved = db.reservations.filter(r=>r.status==='approved').sort((a,b)=>a.date.localeCompare(b.date)||a.startMin-b.startMin);
+  if(pendings.length===0){ const p=document.createElement('div'); p.className='muted'; p.textContent='Žiadne nové žiadosti.'; pendingEl.appendChild(p); hidePendingBadge(); }
+  else {
+    for(const r of pendings) pendingEl.appendChild(renderItem(r,true));
+    showPendingBadge();
+  }
+  if(approved.length===0){ const p=document.createElement('div'); p.className='muted'; p.textContent='Zatiaľ nič schválené.'; approvedEl.appendChild(p); }
+  else for(const r of approved) approvedEl.appendChild(renderItem(r,false));
+}
+
+function renderItem(r, isPending){
+  const el = document.createElement('div'); el.className='item';
+  const left = document.createElement('div');
+  left.innerHTML = '<div style="font-weight:600;">'+escapeHtml(r.email)+'</div>' + (r.note?'<div style="font-size:13px; color:var(--muted)">'+escapeHtml(r.note)+'</div>':'') + '<div class="when" style="color:var(--muted)">'+r.date+' · '+minutesToHHMM(r.startMin)+' – '+minutesToHHMM(r.endMin)+'</div>';
+  const actions = document.createElement('div'); actions.className='actions';
+  if(isPending){ const approve = document.createElement('button'); approve.className='btn-approve'; approve.textContent='Schváliť'; approve.onclick = ()=>approveReservation(r.id); actions.appendChild(approve); }
+  const del = document.createElement('button'); del.className='btn-danger'; del.textContent = isPending ? 'Zamietnuť' : 'Zmazať'; del.onclick = ()=>deleteReservation(r.id); actions.appendChild(del);
+  el.appendChild(left); el.appendChild(actions); return el;
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function approveReservation(id){
+  if(!isAdminLogged()){ alert('Prihláste sa ako admin.'); return; }
+  const db = loadDB();
+  const r = db.reservations.find(x=>x.id===id); if(!r) return;
+  // collision check
+  const sameDay = db.reservations.filter(x=>x.status==='approved' && x.date===r.date);
+  for(const a of sameDay){ if(overlaps(r.startMin,r.endMin,a.startMin,a.endMin)){ alert('Kolízia so schválenou rezerváciou.'); return; } }
+  if(isWeekday(r.date) && overlaps(r.startMin,r.endMin,SCHOOL_BLOCK.start,SCHOOL_BLOCK.end)){ alert('Tento čas je vyhradený pre školu.'); return; }
+  r.status = 'approved'; saveDB(db); renderAdminLists(); renderSlots(document.getElementById('date').value);
+  renderDayList(document.getElementById('dayDate').value || r.date);
+  // notify other tabs/admin that status changed
+  const payload = { type:'approved', id: r.id };
+  if(bc) try{ bc.postMessage(payload); } catch(e){ localStorage.setItem('rez_update', JSON.stringify(payload)); }
+  else localStorage.setItem('rez_update', JSON.stringify(payload));
+}
+
+function deleteReservation(id){
+  if(!isAdminLogged()){ alert('Prihláste sa ako admin.'); return; }
+  const db = loadDB(); const idx = db.reservations.findIndex(x=>x.id===id);
+  if(idx>=0){ db.reservations.splice(idx,1); saveDB(db); }
+  renderAdminLists(); renderSlots(document.getElementById('date').value); renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+  const payload = { type:'deleted', id };
+  if(bc) try{ bc.postMessage(payload); } catch(e){ localStorage.setItem('rez_update', JSON.stringify(payload)); }
+  else localStorage.setItem('rez_update', JSON.stringify(payload));
+}
+
+/* ==================== Day list ==================== */
+function renderDayList(dateStr){
+  const list = document.getElementById('dayList'); list.innerHTML='';
+  if(!dateStr){ list.innerHTML='<div class="muted">Vyberte dátum.</div>'; return; }
+  const { approved, pending } = collectDayReservations(dateStr);
+  const items=[];
+  const push=(s,e,label,cls,email,note)=>items.push({s,e,label,cls,email,note});
+  if(isWeekday(dateStr)) push(SCHOOL_BLOCK.start,SCHOOL_BLOCK.end,'Škola (uzamknuté)','tag-school');
+  for(const r of approved) push(r.startMin,r.endMin,'Uzamknuté (schválené)','tag-busy',r.email,r.note);
+  for(const r of pending) push(r.startMin,r.endMin,'Čaká na schválenie','tag-pending',r.email,r.note);
+  if(items.length===0){ list.innerHTML='<div class="muted">Zatiaľ žiadne rezervácie.</div>'; return; }
+  items.sort((a,b)=>a.s-b.s);
+  for(const it of items){
+    const el = document.createElement('div'); el.className='item';
+    const left = document.createElement('div');
+    left.innerHTML = '<div><span class="tag '+it.cls+'">'+it.label+'</span></div><div class="when" style="color:var(--muted)">'+minutesToHHMM(it.s)+' – '+minutesToHHMM(it.e)+'</div>' + (it.email?'<div style="font-weight:600">'+escapeHtml(it.email)+'</div>':'') + (it.note?'<div class="muted">'+escapeHtml(it.note)+'</div>':'');
+    el.appendChild(left); list.appendChild(el);
+  }
+}
+
+/* ==================== CSV export ==================== */
+function exportCsv(){
+  if(!isAdminLogged()){ alert('Prihláste sa ako admin.'); return; }
+  const db = loadDB();
+  const rows=[['id','date','start','end','email','note','status','createdAt']];
+  db.reservations.forEach(r=> rows.push([r.id, r.date, minutesToHHMM(r.startMin), minutesToHHMM(r.endMin), r.email, (r.note||'').replace(/"/g,'""'), r.status, r.createdAt?new Date(r.createdAt).toISOString():'' ]));
+  const csv = rows.map(r=> r.map(f=> '"'+String(f).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'rezervacie_batovce.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ==================== Listen for updates from other tabs ==================== */
+if(bc) {
+  bc.onmessage = ev => {
+    const m = ev.data;
+    if(m && (m.type==='newReservation' || m.type==='approved' || m.type==='deleted')){
+      if(m.type === 'newReservation' && isAdminLogged()){
+        showPendingBadge();
+        showDesktopNotification('Nová rezervácia', `E-mail: ${m.data.email} — ${m.data.date} ${minutesToHHMM(m.data.startMin)}`);
+      }
+      renderSlots(document.getElementById('date').value);
+      renderAdminLists();
+      renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+    }
+  };
+}
+window.addEventListener('storage', (e)=>{
+  if(e.key==='rez_update' || e.key==='rez_new'){ 
+    try{
+      const parsed = JSON.parse(e.newValue);
+      const db = loadDB();
+      const r = db.reservations.find(x => x.id === parsed.id);
+      if(r && isAdminLogged()){ showDesktopNotification('Nová rezervácia', `E-mail: ${r.email} — ${r.date} ${minutesToHHMM(r.startMin)}`); showPendingBadge(); }
+    }catch(e){}
+    renderSlots(document.getElementById('date').value);
+    renderAdminLists();
+    renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+  }
+});
+
+/* ==================== UI glue ==================== */
+document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('tab-book').style.display = t.dataset.tab==='book' ? 'block' : 'none';
+  document.getElementById('tab-day').style.display = t.dataset.tab==='day' ? 'block' : 'none';
+}));
+
+document.getElementById('makeReservation').addEventListener('click', makeReservation);
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('logoutBtn').addEventListener('click', logout);
+document.getElementById('refreshDay').addEventListener('click', ()=> renderDayList(document.getElementById('dayDate').value));
+document.getElementById('exportCsv').addEventListener('click', exportCsv);
+document.getElementById('clearApproved').addEventListener('click', ()=> {
+  if(!isAdminLogged()){ alert('Prihláste sa ako admin.'); return; }
+  if(!confirm('Naozaj zmazať všetky schválené rezervácie?')) return;
+  const db = loadDB(); db.reservations = db.reservations.filter(r=> r.status!=='approved'); saveDB(db); renderAdminLists(); renderSlots(document.getElementById('date').value); renderDayList(document.getElementById('dayDate').value || document.getElementById('date').value);
+});
+document.getElementById('printDay').addEventListener('click', ()=> { document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); document.querySelector('[data-tab="day"]').classList.add('active'); document.getElementById('tab-book').style.display='none'; document.getElementById('tab-day').style.display='block'; window.print(); });
+
+/* keyboard shortcuts for admin convenience (optional) */
+document.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.key==='m'){ e.preventDefault(); document.getElementById('makeReservation').click(); } });
+
+/* ==================== Init ==================== */
+(function init(){
+  const today = new Date(); const d = toISODate(today); document.getElementById('date').value = d; document.getElementById('dayDate').value = d;
+  let hm = today.getHours()*60 + today.getMinutes(); hm = Math.max(openHour*60, hm + (30 - (hm%30))%30); if(hm >= closeHour*60) hm = openHour*60;
+  document.getElementById('startTime').value = minutesToHHMM(hm);
+  renderSlots(d); renderDayList(d); setAdminStatusUI(); document.getElementById('year').textContent = new Date().getFullYear();
+  // If admin is logged in in another tab, request permission proactively
+  if(isAdminLogged()) requestNotificationPermission();
+  // If there are pending requests already, show badge when admin is logged
+  const db = loadDB();
+  const pendings = db.reservations.filter(r=>r.status==='pending');
+  if(pendings.length>0 && isAdminLogged()) showPendingBadge();
+})();
+</script>
+</body>
+</html>
